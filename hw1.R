@@ -25,3 +25,22 @@ y <- seq(0, 1, 0.001)
 lines(y, dbeta(y, 3, 2))
 
 
+# 3
+# cdf: 1 - (a / (x + a))^b
+# cdf inverse F^-1(u): a * ((1 - u)^(-1/b) - 1)
+pareto.sim <- function(a, b) {
+    u <- runif(1)
+    x <- a * ((1 - u)^(-1/b) - 1)
+    x
+}
+n <- 1000
+y <- rep(0, n)
+for(i in 1:n) {
+    y[i] <- pareto.sim(2, 4)
+}
+
+hist(y, breaks = 50, freq = F, xlab = "x", ylab = "pdf f(x)", 
+    main = "theoretical and simulated pareto(3, 2) density")
+dpareto <- function(x, a, b) b * a^b / (x + a)^(b + 1)
+z <- seq(0, 15, 0.01)
+lines(z, dpareto(z, 2, 4))
