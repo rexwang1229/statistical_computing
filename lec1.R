@@ -214,3 +214,225 @@ p <- -1 / log(1 - theta) * theta^k / k
 se <- sqrt(p * (1 - p) / n)
 p.hat <- tabulate(x) / n
 print(round(rbind(p.hat, p, se), 3))
+
+#--------------------------------------------------------
+# Convolution 
+#--------------------------------------------------------
+# Chi-square distribution
+# Z_1,...,Z_v are iid N(0, 1) r.v.
+# V = Z_1 + ... + Z_v ~ chi_square(v)
+
+n <- 1000
+nu <- 2
+X <- matrix(rnorm(n * nu), n, nu)^2 # matrix of sq. normals
+# sum the squared normals across each row
+# method 1
+y <- rowSums(X)
+# method 2
+y <- apply(X, MARGIN = 1, FUN = sum)
+
+mean(y)
+mean(y^2)
+
+# Convolution of two normal -> use mixture to handle
+# X_1 ~ N(0, 1), X_2 ~ N(3, 1) and independent
+# S = X_1 + X_2 is the convolution of X_1 and X_2 
+normalConvolution.sim <- function() {
+    w <- sample(c(1L, 2L), 1)
+    if(w == 1) {
+        x <- rnorm(1, mean = 0, sd = 1)
+    } else {
+        x <- rnorm(1, mean = 3, sd = 1)
+    }
+    return(x)
+}
+n <- 1000
+s <- rep(0, n)
+for(i in 1:n) {
+    s[i] <- normalConvolution.sim()
+}
+s
+
+# X_1 ~ Gamma(2, 2), X_2 ~ Gamma(2, 4)
+# Generate the sample from the convolution S = X_1 + X_2 and the mixture 
+n <- 1000
+x1 <- rgamma(n, 2, 2)
+x2 <- rgamma(n, 2, 4)
+s <- x1 + x2
+u <- runif(n)
+k <- as.integer(u > 0.5)
+x <- k * x1 + (1 - k) * x2
+
+par(mfcol = c(1, 2))
+hist(s, prob = TRUE)
+hist(x, prob = TRUE)
+par(mfcol = c(1, 1))
+
+# Mixture of several gamma distribution
+# my first try
+k <- c(1L, 2L, 3L, 4L, 5L)
+p <- (1:5) / 15
+mixGamma.sim <- function(r) {
+    x <- sample(k, 1, prob = p)
+    if(x == 1) {
+        return(rgamma(1, shape = r, rate = 1/x))
+    } else if (x == 2) {
+       return(rgamma(1, shape = r, rate = 1/x))
+    } else if (x == 3) {
+       return(rgamma(1, shape = r, rate = 1/x))
+    } else if (x == 4) {
+       return(rgamma(1, shape = r, rate = 1/x))
+    } else {
+       return(rgamma(1, shape = r, rate = 1/x))
+    } 
+}
+
+n <- 5000
+y <- rep(0, n)
+for(i in 1:n) {
+    y[i] <- mixGamma.sim(3)
+}
+y
+plot(density(y), xlim = c(0, 40), ylim = c(0, .3), 
+    lwd = 3, xlab = "x", main = "")
+
+# lecture note
+n <- 5000
+k <- sample(1:5, size = n, replace = TRUE, prob = (1:5)/15)
+rate = 1/k
+x <- rgamma(n, shape = 3, rate = rate)
+plot(density(x), xlim = c(0, 40), ylim = c(0, .3), 
+    lwd = 3, xlab = "x", main = "")
+for(i in 1:5) {
+    lines(density(rgamma(n, 3, 1/i)))
+}
+
+# ex2 for mixture of several gamma distribution
+n <- 5000
+lambda <- seq(1, 3, 0.5)
+theta <- c(.1, .2, .2, .3, .2) 
+k <- sample(lambda, size = n,replace = T, prob = theta)
+x <- rgamma(n, shape = 3, rate = k)
+
+# A function to compute the density f(x)
+f <- function(x, lambda, theta) {
+    # density of the mixture at the point x
+    sum(dgamma(x, 3, lambda) * theta)
+}
+
+p <- c(.1, .2, .2, .3, .2) 
+lambda <- seq(1, 3, 0.5)
+x <- seq(0, 8, length = 200)
+dim(x) <- length(x) # need for apply
+# compute density of the mixture f(x) along x
+y <- apply(x, 1, f, lambda = lambda, theta = p)
+
+plot(x, y, type = "l", ylim = c(0, .85), lwd = 3, ylab = "Density")
+for(j in 1:5) {
+    y <- apply(x, 1, dgamma, shape = 3, rate = lambda[j])
+    lines(x, y)
+}
+
+# Poisson-Gamma mixture distribution
+n <- 1000
+r <- 4
+beta <- 3
+lambda <- rgamma(n, r, beta) # lambda is random
+# Now supply the sample of lambda's as the Poisson mean
+x <- rpois(n, lambda)
+# Compare with negative binomial
+mix <- tabulate(x + 1) / n
+negbin <- round(dnbinom(0:max(x), r, beta / (1 + beta)), 3)
+se <- sqrt(negbin * (1 - negbin) / n)
+round(rbind(mix, negbin, se), 3)
+
+#--------------------------------------------------------
+# Multivariate Normal Distribution
+#--------------------------------------------------------
+# Ex15: Generate a bivariate normal sample 
+# Spectral decomposition method
+mu <- c(0, 0)
+Sigma <- matrix(c(1, .9, .9, 1), nrow = 2, ncol = 2)
+rmvn.eigen <- function(n, mu, Sigma) {
+    # generate n random vectors from MVN(mu, Sigma)
+    # dimension is inferred from mu and Sigma
+    d <- length(mu)
+    ev <- eigen(Sigma, symmetric = TRUE)
+    lambda <- ev$values
+    V <- ev$vectors
+    R <- V %*% diag(sqrt(lambda)) %*% t(V)
+    Z <- matrix(rnorm(n * d), nrow = n, ncol = d)
+    X <- Z %*% R + matrix(mu, n, d, byrow = T)
+    X
+}
+
+# generate the sample
+X <- rmvn.eigen(1000, mu, Sigma)
+plot(X, xlab = "x", ylab = "y", pch = 20)
+print(colMeans(X))
+print(cor(X))
+
+# SVD method
+rmvn.svd <- function(n, mu, Sigma) {
+    # generate n random vectors from MVN(mu, Sigma)
+    # dimension is inferred from mu and Sigma
+    d <- length(mu)
+    S <- svd(Sigma)
+    R <- S$u %*% diag(sqrt(S$d)) %*% t(S$v) # sq. root Sigma
+    Z <- matrix(rnorm(n * d), nrow = n, ncol =d)
+    X <- Z %*% R + matrix(mu, n, d, byrow = TRUE)
+    X
+}
+
+# Choleski Method
+rmvn.Choleski <- function(n, mu, Sigma) {
+    # generate n random vectors from MVN(mu, Sigma)
+    # dimension is inferred from mu and Sigma
+    d <- length(mu)
+    Q <- chol(Sigma) # Choleski factorization of Sigma
+    Z <- matrix(rnorm(n * d), nrow = n, ncol = d)
+    X <- Z %*% Q + matrix(mu, n, d, byrow = TRUE)   
+    X 
+}
+
+#--------------------------------------------------------
+# Perfomance comparisons
+#--------------------------------------------------------
+library(MASS)
+library(mvtnorm)
+n <- 100 # sample size
+d <- 30 # dimension
+N <- 2000 # iterations
+mu <- numeric(d)
+
+# Spectral decomposition
+set.seed(100)
+system.time(for(i in 1:N){
+    rmvn.eigen(n, mu, cov(matrix(rnorm(n * d), n, d)))
+})
+
+# SVD method
+set.seed(100)
+system.time(for(i in 1:N){
+    rmvn.svd(n, mu, cov(matrix(rnorm(n * d), n, d)))
+})
+
+# Choleski method
+set.seed(100)
+system.time(for(i in 1:N){
+    rmvn.Choleski(n, mu, cov(matrix(rnorm(n * d), n, d)))
+})
+
+# mvrnorm
+set.seed(100)
+system.time(for(i in 1:N){
+    mvrnorm(n, mu, cov(matrix(rnorm(n * d), n, d)))
+})
+
+# rmvnorm
+set.seed(100)
+system.time(for(i in 1:N){
+    rmvnorm(n, mu, cov(matrix(rnorm(n * d), n, d)))
+})
+
+
