@@ -1,11 +1,11 @@
-## Lecture 1 (chap 3)
-# Abbreviation
+# Lecture 1 (chap 3)
+## Abbreviation
 - d: density
 - p: cdf
 - q: quantile
 - r: random number from the distribution
 
-# The Inverse Transform Method
+## The Inverse Transform Method
 Every random variable $U$ from a cdf $F_{x}(x)$ is going to follow the distribution $Uniform(0,1)$
 **方法：**\
     **Continuous**
@@ -38,7 +38,7 @@ Every random variable $U$ from a cdf $F_{x}(x)$ is going to follow the distribut
     - 再用一個while loop處理個別sample變換的狀況
 - Ex6: Logarithmic Distribution （對數分佈）
 
-# Acceptance-Rejection Method
+## Acceptance-Rejection Method
 - 使用時機：當inverse transformation不好做的時候（cdf反函數不好求）
 - Target density $f(x)$: 我們想要生成random sample的分佈
 - Instrumental density $g(x)$: 比較簡單的分佈，用其來幫助目標分布的生
@@ -59,7 +59,7 @@ Every random variable $U$ from a cdf $F_{x}(x)$ is going to follow the distribut
 - Ex2: Generate gamma disribution
 
 
-# Transformation Method
+## Transformation Method
 - 利用不同變數之間的變換，生成更多不同分布的變數
 - $Z \sim N(0, 1)$ 系列
     - Chi-Squared: $V = Z^2 \sim \chi^2(1)$
@@ -80,7 +80,7 @@ Every random variable $U$ from a cdf $F_{x}(x)$ is going to follow the distribut
 - Ex1: 生成Beta distribution
 - Ex2: 生成logartihmic distribution
  
-# Convolution and Mixture
+## Convolution and Mixture
 **Convolution $F^*(n)_X$**
 - $X_1, \dots, X_n$ is iid distributed
 - $S = X_1 + \dots + X_n$ is called the n-fold convolution of X
@@ -108,7 +108,7 @@ Every random variable $U$ from a cdf $F_{x}(x)$ is going to follow the distribut
             - $X_5 \sim \Gamma(r = 3, \lambda_i = 1/5)$, $\theta_1 = 5/15$
     - Poisson-Gamma mixture distribution
 
-# Multivariate Normal Distribution
+## Multivariate Normal Distribution
 
 If $Z \sim N_d(0, I_d)$, then $CZ + b \sim N_d(b, CC^T)$ \
 Supposed $\Sigma$ can be factored so that $\Sigma = CC^T$ for some matrix $C$. \
@@ -146,7 +146,7 @@ $\Rightarrow U = V = P$ and $\Sigma^{1/2} = UD^{1/2}V^T$
 
 For a symmetric positive-definite matrix X, there exists an upper triangular matrix $Q$ such that $X = QQ^T$
 
-# Wishart Distribution
+## Wishart Distribution
 **General Method**
 
 先生成n個服從 $N_d(\mu, \Sigma)$ 的random sample，再利用$M = X^TX$的轉換得到Wishart的random sample
@@ -166,3 +166,81 @@ Let $A = (A_{ij})$ be the lower triangular $d \times d$ random matirx with indep
 
 
 
+# Leture 2
+## Simulating Survival Data
+### Cox Propotional Hazards Model
+
+Survival analysis建立在hazard function $h_i(t)$ 以及survival function $S(t|X_i)$上 
+- Hazard function: $h_i(t) = h_0(t)exp(X_i\beta)$
+    - 概念：在t這一時間，瞬間發生事件的風險
+        - $h(t) = \lim_{\Delta t \to \infty}\frac{P(t ≤ T ≤ t+\Delta t| T≥t)}{\Delta t}$
+    - $h_0(t)$: baseline hazard
+    - $X_i$: baseline covariate
+    - $\beta$: vector of log hazard ratio
+- Survival function: $S(t|X_i) = exp(-H_0(t)exp(X_i\beta))$
+    - 概念: 個體存活超過t的機率 $S(t) = P(T > t)$
+    - $H_0(t)$: Cumulative baseline hazard funciton
+    - Proportional Hazard: 同一個風險函數下，survival rate只受$X_i$影響，和$t$無關
+
+### Simulate the survival data
+Simulate survival times $T_i$ under a Cox Propotional Hazard model
+1. Set $S(t|X_i) = exp(-H_0(t)exp(X_i\beta)) = U_i$, where $U_i \sim Unif(0, 1)$
+2. $H_0(t) = \frac{-ln(U_i)}{exp(X_i\beta)} \Rightarrow T_i = H_0^{-1}(\frac{-ln(U_i)}{exp(X_i\beta)})$ 
+
+Hazard function $h(t)$ 是自己訂的，$T_i$對於幾個比較常見的hazard function具有close form
+- **Exponential distribution**: constant baseline hazard 
+
+    $h_0(t) = \lambda \Rightarrow H_0(t) = \lambda t$ 
+
+    $T_i = \frac{-ln(U_i)}{\lambda exp(X_i \beta)}$
+
+- **Weibull distribution**: monotonic baseline hazard 
+    
+    $h_0(t) = \lambda \nu t^{\nu-1}\Rightarrow H_0(t) = \lambda t^\nu$ 
+
+    $T_i = (\frac{-ln(U_i)}{\lambda exp(X_i \beta)})^{1/\nu}$
+- **Gompertz distribution**: exponentially changing baseline hazard
+    
+    $h_0(t) = a\exp(bt) \Rightarrow H_0(t) = \frac{a}{b}(\exp(bt) - 1)$ 
+
+    $T_i = \frac{1}{b} \ ln(1 - \frac{b\ln(U_i)}{\lambda \exp(X_i \beta)})$
+
+若是遇到hazard function太複雜沒有close-form的狀況\
+$\Rightarrow$ 利用$\texttt{simsurv}$ to solve the root-finding problem numerically
+
+## Censoring Data
+受試者在實驗進行到一半時退出的狀況\
+For each individual $i$
+- $T_i$: True event time
+- $C_i$: Censoring time
+- $d_i$: Observed status indicator $d_i = I(T_i ≤ C_i)$
+    - $d_i = 1$: Uncensored
+    - $d_i = 0$: Censored
+- Censor Rate = $P(T_i > C_i) = \frac{\sum_{i=1}^{n}I(d_i = 0)}{n} = 1-\bar{d}$
+
+### Simulation of Right-Censoring Mechanisms
+**1. Independent Censoring Time Generation**
+- 對每個資料i個別模擬一個censoring time $C_i$
+- $C_i \sim Uniform(0, \tau)$
+- 透過調整upper bound $\tau$，可以控制資料中censored data的比例
+
+**2. Constructing the Observed Variables**
+- 每個survival dataset都會有兩個observed variables $(Y_i, d_i)$
+- Observed Survival TIme $Y_i = min(T_i, C_i)$  
+- Event Indicator $d_i = I(T_i ≤ C_i)$
+    - 0: Event was actually observed
+    - 1: Individual was censored
+
+**如何控制censor rate**
+- 透過調整$\tau$來控制，$\tau$越大則more censoring，反之亦然
+- 找到最佳$\tau$的方式
+    - Mathematical expection
+    - Iterative simulation / Root-finding
+
+### Models for Survival Data
+#### Cox Proportional Hazards Model (Cox PH)
+
+
+
+
+#### Accelerated Failure Time (AFT)
