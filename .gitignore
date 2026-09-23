@@ -1,0 +1,20 @@
+# macOS 系統檔
+.DS_Store
+
+# R 工作階段檔
+.Rhistory
+.RData
+.Rproj.user/
+Rplots.pdf
+
+# knitr / R Markdown 產生的中間檔
+*_cache/
+*_files/
+*.log
+*.aux
+*.tex
+*.out
+
+# 編輯器與 Claude Code 設定
+.vscode/
+.claude/
