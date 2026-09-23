@@ -68,7 +68,7 @@ summary(cox_model)
 # Monte Carlo Power Sensitivity Analysis Across Censoring Rates
 #----------------------------------------------------------------
 library(survival)
-
+    
 run_mc_power_r <- function(sample_sizes = c(50, 80, 100, 150, 200, 250, 300, 500),
                            n_sim = 1000,
                            seed = 42) {
@@ -112,3 +112,5 @@ run_mc_power_r <- function(sample_sizes = c(50, 80, 100, 150, 200, 250, 300, 500
 # Run R simulation
 power_table <- run_mc_power_r()
 print(power_table)
+
+
