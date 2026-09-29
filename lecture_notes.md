@@ -409,3 +409,68 @@ summary(aft_model)
 | Survival curve 變化 | y 軸方向變形 | x 軸方向拉伸 / 壓縮 |
 | Baseline 分佈 | 不需指定（semi-parametric） | 通常需指定（parametric） |
 | R 函數 | `coxph()` | `survreg()` |
+
+
+# Lecture 3
+## Numerical Integration 
+- For many functions $f$, their integral $\int_{a}^b f(x) dx$ don't have closed form 
+- We can use **numerical integral** to approximate the definite integral
+- Three techniques: 
+    - The trapezoid rule
+    - Simpson's rule 
+    - Adaptive quadrature
+- How it works:
+    1. Subdivide the interval [a, b] into n equal subintervals
+    2. Approximate the integral on each of these small intervals
+    3. Add them up and we can get the total approximation to the original integral
+
+### Trapezoidal(梯形) Rule
+如果我們將[a, b]切成n塊，可以得到幾個點$x_0 = a, x_1 = a + \frac{(b-a)}{n},\dots,x_n = b$ 
+
+- Width of the trapezoid: $h$, if we set $h = \frac{(b-a)}{n}$
+- Left side height: $f(x_i)$
+- Right side height: $f(x_{i + 1})$
+
+$\Rightarrow$ the area of the trapezoid $= \frac{h}{2}(f(x_i) + f(x_{i+1}))$
+
+把所有n個區段的梯形面積相加後，即可得到最終對於這個積分的數值積分解：
+$$T = \frac{h}{2}(f(x_0) + 2f(x_1)+2f(x_2)+ \dots + 2f(x_{n-1})+f(x_n))$$
+
+
+### Simpson's Rule
+- 用二次曲線(parabola)來近似函數曲線$f(x)$，再計算拋物線下的面積作為定積分的近似
+- Derive the formula:
+    1. Parabola $y = ax^2 + bx + c$ 通過 $(-h,y_0), (0, y_1), (h, y_2)$ 三點 
+    2. 此時拋物線下面積 $A = \int_{-h}^{h} (ax^2 + bx + c) dx = \frac{h}{3} (2ah^2 + 6c)$
+    3. 因為三個點都在拋物線上，因此我們可以得知
+    
+        $y_0 = ah^2 - bh + c$\
+        $y_1 = c$\
+        $y_2 = ah^2 + bh + c$
+    4. 將$y_0, y_1, y_2$ 的關係湊成以下的式子，可以發現結果剛好等於 $A$ 面積中的 $2ah^2 + 6c$ 這項
+
+        $y_0 + 4y_1 + y_2 = (ah^2 - bh + c) + 4c + (ah^2 + bh + c) = 2ah^2 + 6c$
+
+    5. 近一步可以得到 
+
+        $A = \frac{h}{3}(y_0 + 4y_1 + y_2) = \frac{\Delta x}{3}(y_0 + 4y_1 + y_2)$
+
+- How it works
+    1. 針對 $f(x)$ 在 $[a, b]$ 上的數值積分，我們先將 $[a, b]$ 拆分成n(偶數)個subinterval 
+        - 偶數：要三個點才可以形成一條唯一的拋物線，做法上是兩個區間為一組
+    
+        $ \Delta x = \frac{b - a}{n}$
+    
+        並可以將[a , b]這個區間分成數個點
+
+        $x_0 = a, x_1 = a + \Delta x, x_2 = a + 2\Delta x, \dots, b = a + n \Delta x$
+
+    2. 將每一個拋物線相加後即可得到Simpson's近似積分的結果
+    
+    $\int_{a}^{b}f(x)dx \approx \frac{\Delta x}{3}(y_0 + 4y_1 + y_2) + \frac{\Delta x}{3}(y_2 + 4y_3 + y_4) + \dots+ \frac{\Delta x}{3}(y_{n-2} + 4y_{n-1} + y_n)$
+
+整理之後即可得到Simpson's Rule數值積分的公式
+$$ S = \frac{h}{3}(f(x_0) + 4f(x_1) + 2f(x_2) + 4f(x_3) + \dots + 4f(x_{n-1}) + f(x_n))$$
+
+- 如何選取最合適的n: 利用$|S(2n) - S(n)| ≤ \epsilon$, where $\epsilon > 0$的迴圈來做
+
