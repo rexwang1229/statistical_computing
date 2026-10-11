@@ -474,3 +474,7 @@ $$ S = \frac{h}{3}(f(x_0) + 4f(x_1) + 2f(x_2) + 4f(x_3) + \dots + 4f(x_{n-1}) + 
 
 - 如何選取最合適的n: 利用$|S(2n) - S(n)| ≤ \epsilon$, where $\epsilon > 0$的迴圈來做
 
+### Adaptive Quadrature
+- Subinterval width h is not constant
+   - Integrand $f$ is steep $\rightarrow$ h needs to be small
+- Limitation: Integration can be infinite

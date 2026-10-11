@@ -57,3 +57,4 @@ simpson <- function(ftn, a, b, tol = 1e-8, verbose = FALSE) {
     if(verbose) cat('partition size', n, '\n')
     return(S)
 }
+
