@@ -1,0 +1,170 @@
+---
+title: "HW2"
+author: "R14621207 王紹宇"
+format:
+  pdf:
+    pdf-engine: xelatex
+    documentclass: article
+    geometry:
+      - left=1.5cm
+      - right=1.5cm
+      - top=2cm
+      - bottom=2cm
+    include-in-header:
+      text: |
+        \usepackage{ctex}
+editor: visual
+---
+
+## 1.
+
+由於g(x)的定義域為$(1, \infty)$，因此我找的$f_1$為截斷在1的Exp(1)分配，而$f_2$則為截斷在1的常態分配 $$f_1 = e^{-(x-1)} , \ x > 1$$ $$f_2 = \frac{1}{\sqrt{2\pi}} e^{-0.5x^2} \div (1 - \Phi(1)), \ x > 1$$
+
+接著利用importance sampling的技巧，$\int_1^{\infty} g(x) dx = \int_1^{\infty}f(x) \frac{g(x)}{f(x)} dx = E_f[\frac{g(x)}{f(x)}]$。我們便可以透過生$f_1$以及$f_2$的隨機樣本，近一步得到$\int_1^{\infty} g(x) dx$的估計。
+
+在兩個分配隨機樣本生成方面，$f_1$採用`rexp(m) + 1`，而$f_2$則透過`truncnorm`套件中的`rtruncnorm(m, a = 1, b = Inf)`函數生成截斷在1的standard normal distribution隨機樣本。
+
+Importance sampling estimator的變異數取決於$g(x)/f(x)$是否接近常數。對$f_2$而言，$\frac{g(x)}{f_2(x)} = x^2(1-\Phi(1))$會隨$x^2$無界成長，代表$f_2$的尾巴相對$g$過薄；而$\frac{g(x)}{f_1(x)} = \frac{x^2}{\sqrt{2\pi}}e^{-x^2/2 + x - 1}$在$x>1$上有界且在尾端趨近於0，比值變動幅度較小。因此預期相較$f_1$會有較小的variance。
+
+從結果我們也可以看到，利用$f_1$作為importance function相較$f_2$有更小的variance。
+
+```{r}
+# 1
+m <- 10000
+theta.hat <- variance <- numeric(2)
+g <- function(x) (x^2 / sqrt(2 * pi)) * exp(-x^2 / 2)
+
+# f1: exp(1) truncated at 1
+f1 <- function(x) exp(- (x - 1))
+x1 <- rexp(m) + 1
+f1g <- g(x1) / f1(x1)
+theta.hat[1] <- mean(f1g)
+variance[1] <- var(f1g)
+
+# f2: N(0, 1) truncated at 1
+library(truncnorm)
+f2 <- function(x) (1 / sqrt(2 * pi)) * exp(-0.5 * x^2) / (1 - pnorm(1))
+x2 <- rtruncnorm(m, a = 1, b = Inf)
+f2g <- g(x2) / f2(x2)
+theta.hat[2] <- mean(f2g)
+variance[2] <- var(f2g)
+
+rbind(theta.hat, variance)
+```
+
+## 2
+$g(x) = e^{-x}$，因此我們可以透過計算$\int_0^1 e^{-x}dx = 1-e^{-1}$得到$\mu = E_U[g(x)] = 1 - e^{-1}$
+
+首先我們先生成10000個服從$Unif(0, 1)$的隨機變數U，接著透過$c^* = - \frac{Cov(h(U), g(U))}{Var(g(U))}$，我們可以得到最利用control variate最佳的c。
+
+接著將這個$c^*$代入$T1 = h(U) + c^* (g(U)-\mu)$中，而對T1取平均即可得到利用control variate估計$\int_0^1 e^{-x} \cos(\pi x)dx$的結果。
+
+而一般without control variate的Monte Carlo estimator可透過將U代入$h(x) = e^{-x}\cos(\pi x)$接著取平均後得到。
+
+從結果上我們可以看到variance reduction的比例約為0.98，control variate大幅降低了估計量的變異數。
+
+```{r}
+# 2
+m <- 10000 
+x <- runif(m)
+h <- function(x) exp(-x) * cos(pi * x)
+
+# control variate
+g <- function(x) exp(-x)
+mu <- 1 - exp(-1)
+c_star <- - cov(h(x), g(x)) / var(g(x))
+T1 <- h(x) + c_star * (g(x) - mu)
+mean(T1)
+
+# simple MC
+T2 <- h(x)
+mean(T2)
+
+# variance reduction
+(var(T2) - var(T1)) / var(T2)
+```
+
+## 3
+首先生成10000個服從$Unif(0,1)$的隨機樣本U。
+
+a小題只要把U代入$e^{x^2}$，取平均後即可得到regular Monte Carlo estimator。
+
+b小題則是將U代入$\frac{1}{2}e^{U^2} + \frac{1}{2}e^{(1-U)^2}$，取平均後可得到antithetic variable estimator
+
+c小題的部分則是透過$c^* = - \frac{Cov(e^{U^2}, U)}{Var(U)}$，其中我們知道U來自$Unif(0, 1)$，因此其理論的變異數應為$\frac{1}{12}$，接著我們可以得到最利用control variate最佳的c。接著將這個$c^*$代入$e^{U^2} + c^* (U - E(U))$中，其中我們知道U來自$Unif(0, 1)$，因此其理論的平均數應為$\frac{1}{2}$，因此可以得到$e^{U^2} + c^* (U - 0.5)$，對其取平均即可得到control variate estimator。
+
+d小題的部分則是透過配適一個$e^{(1-U)^2} = \alpha(e^{U^2} - e^{(1-U)^2}) + c(U-\frac{1}{2})$模型，我們令$A = e^{U^2},\ B = e^{(1-U)^2},\ V = U-\frac{1}{2}$
+其中$\alpha$會是$(A-B)$的係數取負數，而$c$是$V$的係數取負數。接著我們便將得到的$\alpha^*,\ c^*$代入後取平均便可以得到估計。
+
+最後是4個estimators efficiency的比較，我透過standard deviation來比較。從結果中可以看到，兩個有利用antithetic的estimator有較低的標準差，單純使用control variate較這兩者要高一些些，而antithetic和control variate combined 的estimator標準差最低，但僅略低於antithetic estimator。至於regular MC estimator的標準差明顯高於其他三個estimators，顯示三種variance reduction方法確實都有效地增加estimator的efficiency。
+```{r}
+# 3
+library(tidyverse)
+n <- 10000
+u <- runif(n)
+g <- function(x) exp(x^2)
+
+# regular MC
+regMC <- g(u)
+theta_regMC <- mean(regMC)
+sd_regMC <- sd(regMC)
+
+# antithetic variable
+a <- 0.5 * g(u) + 0.5 * g(1 - u)
+theta_a <- mean(a)
+sd_a <- sd(a)
+
+# control variate
+c <- - cov(g(u), u) / (1 / 12)
+cv <- g(u) + c * (u - 0.5)
+theta_cv <- mean(cv)
+sd_cv <- sd(cv)
+
+# combine antithetic and control variate
+A <- g(u)
+B <- g(1 - u)
+V <- u - 0.5
+fit <- lm(B ~ I(A - B) + V)
+alpha_star <- -coef(fit)[2]
+c_star2 <- -coef(fit)[3]
+c(alpha_star, c_star2)     
+
+mix <- alpha_star * A + (1 - alpha_star) * B + c_star2 * V
+theta_mix <- mean(mix)
+sd_mix <- sd(mix) 
+
+
+name <- c("Regular MC", "Antithetic", "Control Variate", "Combine")
+set_names(c(theta_regMC, theta_a, theta_cv, theta_mix), name)
+set_names(c(sd_regMC, sd_a, sd_cv, sd_mix), name)
+```
+
+## 4
+我令$\tilde{p}(x) = e^{-(0.5 - x)^2 / 2}e^{-3x}$、$q(x) = 3e^{-3x}$。而$q(x)$為Exp(3)的pdf，因此我可以透過`rexp(10000, 3)`生成10000個服從q(x)的隨機樣本。
+
+接著我將這些隨機樣本代入$w(x) = \frac{\tilde{p}(x)}{q(x)}$，得到10000個weight。接著我將這些weight相加後放到分母，並以每一個weight 作為分子，得到$w_{adj}$。最後將前面生成的隨機樣本乘上其對應的$w_{adj}$並相加後，即可得到$\theta$的估計。
+
+我透過一個迴圈模擬在不同的樣本數之下，$\theta$估計的表現，可以看到在樣本數超過大約2000之後，整體估計和真實值趨於一致。其中真實值可由$\tilde{p}(x) \propto e^{-(x+2.5)^2/2}$得知$p$為$N(-2.5, 1)$截斷在$x>0$的分配，因此$\theta = -2.5 + \frac{\phi(2.5)}{\Phi(-2.5)} \approx 0.3227$（圖中紅色虛線）。
+```{r}
+# 4
+# p_tilde(x) = exp(-(0.5 - x)^2 / 2) * exp(-3 * x)
+# q(x) = 3 * exp(-3 * x) ~ Exp(3)
+n <- 10000
+theta_hat <- numeric(n)
+x <- rexp(n, 3)
+
+for(i in 1:n) {
+  xi <- x[1:i]
+  w <- function(x) exp(-(0.5 - x)^2 / 2) / 3
+  w_tilde <- w(xi)
+  w_adj <- w_tilde / sum(w_tilde)
+  theta_hat[i] <- sum(xi * w_adj)
+}
+p_tilde <- function(x) exp(-(0.5 - x)^2 / 2) * exp(-3 * x)
+theta_true <- integrate(function(x) x * p_tilde(x), 0, Inf)$value /
+  integrate(p_tilde, 0, Inf)$value
+plot(theta_hat, type = "l", xlab = "sample size")
+abline(h = theta_true, col = "red", lty = 2)
+
+
+```

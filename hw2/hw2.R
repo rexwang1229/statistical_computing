@@ -66,7 +66,7 @@ theta_cv <- mean(cv)
 sd_cv <- sd(cv)
 
 # combine antithetic and control variate
-u <- runif(n / 2)
+u <- runif(n)
 A <- g(u)
 B <- g(1 - u)
 V <- u - 0.5
@@ -99,6 +99,10 @@ for(i in 1:n) {
   w_adj <- w_tilde / sum(w_tilde)
   theta_hat[i] <- sum(xi * w_adj)
 }
+p_tilde <- function(x) exp(-(0.5 - x)^2 / 2) * exp(-3 * x)
+theta_true <- integrate(function(x) x * p_tilde(x), 0, Inf)$value /
+  integrate(p_tilde, 0, Inf)$value
 plot(theta_hat, type = "l", xlab = "sample size")
+abline(h = theta_true, col = "red", lty = 2)
 
 
