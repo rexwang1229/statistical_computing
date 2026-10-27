@@ -1,0 +1,183 @@
+---
+title: "Statistical Computing Midterm"
+author: "R14621207 王紹宇"
+date: "2026-10-26"
+output:
+  html_document:
+    df_print: paged
+  pdf_document:
+    latex_engine: xelatex
+header-includes:
+- \usepackage{xeCJK}
+- \setCJKmainfont{Songti TC}
+---
+
+## 1
+
+We want to find the estimation for this integral using standard normal distribution. $\theta$ can be view as $\theta = \int_1^{\infty} g(x)f(x)dx$ where $g(x) = x^2$ and $f(x) = \frac{1}{\sqrt{2 \pi}} e^{-x^2/2}$, $1 < x <$ $\infty$. 
+
+What I'm going to do is sample from standard normal distribution, and then insert these samples X to g(x). Therefore, we can get $E[g(X) I(X > 1)]$ which is the estimation for this integral.
+
+
+```{r q1}
+set.seed(1024)
+n <- 10000
+X <- rnorm(n) 
+g <- X^2 * (X > 1)
+
+theta_hat <- cumsum(g) / seq_len(n)
+
+f <- function(x) (x^2 / sqrt(2 * pi)) * exp(- x^2 / 2)
+theta <- integrate(f, lower = 1, upper = Inf)
+
+plot(theta_hat, type = "l", xlab = "sample size")
+abline(h = theta$value, col = "red")
+
+```
+
+## 2
+```{r q2_importance sampling}
+set.seed(1024)
+n <- 10000
+x <- rnorm(n)
+
+g <- function(x) {
+  x^2 / sqrt(2 * pi) * exp(-x^2 / 2) * (x > 1)
+}
+fg <- g(x) / (1 / sqrt(2 * pi) * exp(-x^2 / 2))
+theta_hat <- mean(fg)
+
+fg_cum <- cumsum(fg) / seq_len(n)
+
+f <- function(x) (x^2 / sqrt(2 * pi)) * exp(- x^2 / 2)
+theta <- integrate(f, lower = 1, upper = Inf)
+
+plot(fg_cum, type = "l", xlab = "sample size")
+abline(h = theta$value, col = "red")
+
+```
+
+
+```{r}
+set.seed(1024)
+n <- 10000
+x <- rnorm(n, mean = 2, sd = 1)
+w <- dnorm(x) / dnorm(x, 2, 1)
+h <- x^2 * (x > 1)
+theta_hat <- cumsum(h * w) / cumsum(w)
+
+f <- function(x) (x^2 / sqrt(2 * pi)) * exp(- x^2 / 2)
+theta <- integrate(f, lower = 1, upper = Inf)
+
+plot(theta_hat, type = "l", xlab = "sample size")
+abline(h = theta$value, col = "red")
+
+
+```
+
+## 3
+Let $y = 1/x$, then $dy = \frac{-1}{x^2} dx$. We can therefore get $\theta = \int_1^0 \frac{-x^4}{\sqrt{2 \pi}} e^{-x^2 / 2} dy = \int_0^1 \frac{1}{y^4 \sqrt{2 \pi}} e^{-1 / 2y^2} dy$. 
+
+Then we can simply generate samples U from $Uniform(0,1)$ and insert it into $\frac{1}{y^4 \sqrt{2 \pi}}$ $e^{-1 / 2y^2}$. After that, we can get the estimation for $\theta$.
+
+```{r q3}
+set.seed(1024)
+n <- 10000
+u <- runif(n)
+Y <- 1 / (u^4 * sqrt(2 * pi)) * exp(-1 / (2 * u^2))
+
+theta_hat <- cumsum(Y) / seq_len(n)
+
+f <- function(x) (x^2 / sqrt(2 * pi)) * exp(- x^2 / 2)
+theta <- integrate(f, lower = 1, upper = Inf)
+
+plot(theta_hat, type = "l", xlab = "sample size")
+abline(h = theta$value, col = "red")
+
+
+```
+## 4
+Two control variates I use are $f_1(u) = u$ and $f_2(u) = u(1 - u)$, where $U \sim Uniform(0, 1)$. Based on the result of question 3, we let our target to be$g(x) = \frac{1}{x^4 \sqrt{2 \pi}} e^{-1/2x^2}$. 
+
+```{r q4}
+set.seed(1024)
+n <- 10000
+u <- runif(n)
+g <- 1 / (u^4 * sqrt(2 * pi)) * exp(-1 / (2 *u^2))
+f1 <- u
+f2 <- u * (1 - u)
+
+L <- lm(g ~ f1 + f2)
+c1 <- -L$coefficients[2]
+c2 <- -L$coefficients[3]
+T_cv <- g + c1 * (f1 - 0.5) + c2 * (f2 - 1/6)
+
+theta_hat <- cumsum(T_cv) / seq_len(n)
+
+f <- function(x) (x^2 / sqrt(2 * pi)) * exp(- x^2 / 2)
+theta <- integrate(f, lower = 1, upper = Inf)
+
+plot(theta_hat, type = "l", xlab = "sample size")
+abline(h = theta$value, col = "red")
+
+```
+
+## 5
+
+
+```{r}
+set.seed(1024)
+M <- 10000
+n <- 10
+r <- M / n
+N <- 1000
+T2 <- numeric(n)
+estimates <- numeric(N)
+
+
+g <- function(x) {
+  1 / (x^4 * sqrt(2 * pi)) * exp(-1 /(2 * x^2))
+}
+
+f <- function(x) (x^2 / sqrt(2 * pi)) * exp(- x^2 / 2)
+theta <- integrate(f, lower = 1, upper = Inf)$value 
+
+n <- c(1, 2, 5, 10, 50, 100, 500, 1000)
+result <- matrix(0, 8, 3, dimnames = list(n, c("mean", "sd", "bias")))
+
+for(i in 1:length(n)) {
+  k <- n[i]
+  T2 <- numeric(k)
+  for(j in 1:N) {
+    for(p in 1:k) {
+      T2[p] <- mean(g(runif(M/k, (p-1)/k, p/k))) 
+      }
+    estimates[j] <- mean(T2)
+  }
+  result[i, 1] <- mean(estimates)
+  result[i, 2] <- sd(estimates)
+  result[i, 3] <- mean(estimates) - theta
+}
+result
+
+```
+
+## 5
+```{r}
+set.seed(1024)
+n <- 10000
+Y <- function(x, t) x^2 * dnorm(x) / dnorm(x, t, 1) * (x > 1)
+t_grid <- seq(-10, 10, by = 1)
+result <- matrix(0, length(t_grid), 2, dimnames = list(t_grid, c("mean", "sd")))
+
+for(i in 1:length(t_grid)) {
+  t_val <- t_grid[i]
+  x <- rnorm(n, t_val, 1)
+  T1 <- Y(x, t_val) 
+  result[i, 1] <- mean(T1)
+  result[i, 2] <- sd(T1) / sqrt(n)
+}
+result
+
+
+```
