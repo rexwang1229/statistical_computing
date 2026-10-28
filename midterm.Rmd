@@ -1,31 +1,42 @@
 ---
 title: "Statistical Computing Midterm"
 author: "R14621207 王紹宇"
-date: "2026-10-26"
+date: "2026-10-27"
 output:
-  html_document:
-    df_print: paged
   pdf_document:
     latex_engine: xelatex
+  html_document:
+    df_print: paged
 header-includes:
 - \usepackage{xeCJK}
 - \setCJKmainfont{Songti TC}
 ---
 
-## 1
+## Problem
 
-We want to find the estimation for this integral using standard normal distribution. $\theta$ can be view as $\theta = \int_1^{\infty} g(x)f(x)dx$ where $g(x) = x^2$ and $f(x) = \frac{1}{\sqrt{2 \pi}} e^{-x^2/2}$, $1 < x <$ $\infty$. 
+Consider the estimation of
+$$
+\theta = \int_1^{\infty} \frac{x^2}{\sqrt{2\pi}} e^{-x^2/2}\, dx.
+$$
+Use the following methods to estimate $\theta$ and make a comparison of them. For each method, draw a plot to show the convergence of the approximation.
 
-What I'm going to do is sample from standard normal distribution, and then insert these samples X to g(x). Therefore, we can get $E[g(X) I(X > 1)]$ which is the estimation for this integral.
+## 1 Direct Monte Carlo method (standard normal distribution as the sampling distribution).
 
+The integral can be written as an expectation with respect to the standard normal distribution,
+$$
+\theta = \int_{-\infty}^{\infty} g(x)\,\phi(x)\,dx = E\left[g(X)\right], \qquad g(x) = x^2 I(x > 1), \quad X \sim N(0, 1),
+$$
+where $\phi(x) = \frac{1}{\sqrt{2\pi}} e^{-x^2/2}$ is the pdf of standard normal distribution. Hence we draw $X_1, \dots, X_N \overset{iid}{\sim} N(0, 1)$ and estimate $\theta$ by the sample mean $\hat{\theta} = \frac{1}{N}\sum_{i=1}^N X_i^2 I(X_i > 1)$.
+
+For reference, the exact value of $\theta$ is $\approx 0.4006$ (use `integrate()` to find), which is drawn as the red line in every plot below.
 
 ```{r q1}
 set.seed(1024)
-n <- 10000
-X <- rnorm(n) 
+N <- 10000
+X <- rnorm(N) 
 g <- X^2 * (X > 1)
 
-theta_hat <- cumsum(g) / seq_len(n)
+theta_hat <- cumsum(g) / seq_len(N)
 
 f <- function(x) (x^2 / sqrt(2 * pi)) * exp(- x^2 / 2)
 theta <- integrate(f, lower = 1, upper = Inf)
@@ -33,76 +44,126 @@ theta <- integrate(f, lower = 1, upper = Inf)
 plot(theta_hat, type = "l", xlab = "sample size")
 abline(h = theta$value, col = "red")
 
-```
-
-## 2
-```{r q2_importance sampling}
-set.seed(1024)
-n <- 10000
-x <- rnorm(n)
-
-g <- function(x) {
-  x^2 / sqrt(2 * pi) * exp(-x^2 / 2) * (x > 1)
-}
-fg <- g(x) / (1 / sqrt(2 * pi) * exp(-x^2 / 2))
-theta_hat <- mean(fg)
-
-fg_cum <- cumsum(fg) / seq_len(n)
-
-f <- function(x) (x^2 / sqrt(2 * pi)) * exp(- x^2 / 2)
-theta <- integrate(f, lower = 1, upper = Inf)
-
-plot(fg_cum, type = "l", xlab = "sample size")
-abline(h = theta$value, col = "red")
+# Keep the result of estimation and standard error for later use
+theta_MC <- theta_hat[N]
+sd_MC <- sd(g) / sqrt(N)
 
 ```
 
+## 2 Importance sampling method and the self-normalized importance sampling methods. Is there any difference between two methods? Which one is an unbiased estimator?
 
-```{r}
+**Importance sampling** 
+
+Let $q$ be an importance function. Then
+$$
+\theta = \int_{-\infty}^{\infty} h(x) \frac{\phi(x)}{q(x)} q(x)\,dx = E_q\left[h(Y) w(Y)\right], \qquad h(x) = x^2 I(x > 1), \quad w(x) = \frac{\phi(x)}{q(x)}.
+$$
+Since the integrand is zero for $x < 1$ and peaks at $x = \sqrt{2}$, a good importance function should put most of its mass on $(1, \infty)$. Therefore, I use $q = N(2, 1)$, so that
+$$
+w(x) = \frac{e^{-x^2/2}}{e^{-(x-2)^2/2}} = e^{2 - 2x}, \qquad \hat{\theta}_{IS} = \frac{1}{N}\sum_{i=1}^N h(Y_i)\, w(Y_i), \quad Y_i \overset{iid}{\sim} N(2, 1).
+$$
+
+```{r q2_is}
 set.seed(1024)
-n <- 10000
-x <- rnorm(n, mean = 2, sd = 1)
+N <- 10000
+x <- rnorm(N, mean = 2, sd = 1)
 w <- dnorm(x) / dnorm(x, 2, 1)
 h <- x^2 * (x > 1)
-theta_hat <- cumsum(h * w) / cumsum(w)
+hw <- h * w
 
-f <- function(x) (x^2 / sqrt(2 * pi)) * exp(- x^2 / 2)
-theta <- integrate(f, lower = 1, upper = Inf)
+theta_hat <- cumsum(hw) / seq_len(N)
 
 plot(theta_hat, type = "l", xlab = "sample size")
 abline(h = theta$value, col = "red")
 
+# Keep the result of estimation and standard error for later use
+theta_IS <- theta_hat[N]
+sd_IS <- sd(hw) / sqrt(N)
 
 ```
 
-## 3
-Let $y = 1/x$, then $dy = \frac{-1}{x^2} dx$. We can therefore get $\theta = \int_1^0 \frac{-x^4}{\sqrt{2 \pi}} e^{-x^2 / 2} dy = \int_0^1 \frac{1}{y^4 \sqrt{2 \pi}} e^{-1 / 2y^2} dy$. 
+**Self-normalized importance sampling**
 
-Then we can simply generate samples U from $Uniform(0,1)$ and insert it into $\frac{1}{y^4 \sqrt{2 \pi}}$ $e^{-1 / 2y^2}$. After that, we can get the estimation for $\theta$.
+Using the same samples $Y_i \sim N(2, 1)$ and the same weights $w_i = w(Y_i)$, the self-normalized estimator divides by the sum of the weights instead of $N$,
+$$
+\hat{\theta}_{SNIS} = \frac{\sum_{i=1}^{N} h(Y_i)\, w_i}{\sum_{i=1}^{N} w_i} = \sum_{i=1}^{N} h(Y_i)\, \bar{w}_i, \qquad \bar{w}_i = \frac{w_i}{\sum_{j=1}^{N} w_j}.
+$$
+Its standard error is approximated by the delta method, $\widehat{se} = \sqrt{\sum_i w_i^2 \left(h(Y_i) - \hat{\theta}_{SNIS}\right)^2} \Big/ \sum_i w_i$.
+
+```{r q2_snis}
+theta_hat <- cumsum(hw) / cumsum(w)
+
+plot(theta_hat, type = "l", xlab = "sample size")
+abline(h = theta$value, col = "red")
+
+theta_SNIS <- theta_hat[N]
+sd_SNIS <- sqrt(sum(w^2 * (h - theta_SNIS)^2)) / sum(w)
+
+```
+
+**Comparison** 
+
+The two estimators differ only in the denominator. IS divides by $N$, while SNIS divides by $\sum_i w_i$, which is itself a random estimate of $N$ (since $E_q[w(Y)] = 1$).
+
+Because $E_q[h(Y)w(Y)] = \theta$ exactly, $\hat{\theta}_{IS}$ is an unbiased estimator of $\theta$. In contrast, $\hat{\theta}_{SNIS}$ is a ratio of two random quantities, so it is biased for finite $N$. It is only consistent, meaning that $\hat{\theta}_{SNIS} \to \theta$ as $N \to \infty$. The advantage of SNIS is that the weights only need to be known up to a constant, which is useful when the target density cannot be normalized. Here $\phi$ is fully known, so this advantage is not needed.
+
+The simulation below repeats both estimators 10000 times with a small sample size $N = 10$ to make the bias visible.
+We can see that the average of $\hat{\theta}_{IS}$ is essentially $\theta$, whereas $\hat{\theta}_{SNIS}$ shows a clear positive bias.
+```{r q2_bias}
+set.seed(1024)
+R <- 10000
+m <- 10
+est <- replicate(R, {
+  y <- rnorm(m, mean = 2, sd = 1)
+  w <- dnorm(y) / dnorm(y, 2, 1)
+  h <- y^2 * (y > 1)
+  c(IS = mean(h * w), SNIS = sum(h * w) / sum(w))
+})
+rbind(mean = rowMeans(est), bias = rowMeans(est) - theta$value)
+
+```
+
+
+## 3 Variable transformation of the integrand to a interval of $[0, 1]$.
+
+Substitute $y = 1/x$, so that $x = 1/y$ and $dx = -\frac{1}{y^2}\,dy$, and the range $x \in (1, \infty)$ becomes $y \in (0, 1)$. Then
+$$
+\theta = \int_1^0 \frac{1}{y^2} \cdot \frac{1}{\sqrt{2\pi}} e^{-1/(2y^2)} \cdot \left(-\frac{1}{y^2}\right) dy = \int_0^1 \frac{1}{y^4 \sqrt{2 \pi}}\, e^{-1/(2y^2)}\, dy = E\left[k(U)\right],
+$$
+where $k(y) = \frac{1}{y^4 \sqrt{2 \pi}} e^{-1/(2y^2)}$ and $U \sim \text{Uniform}(0, 1)$. Thus we generate $U_1, \dots, U_N \overset{iid}{\sim} \text{Uniform}(0, 1)$ and estimate $\theta$ by $\hat{\theta} = \frac{1}{N}\sum_{i=1}^N k(U_i)$.
 
 ```{r q3}
 set.seed(1024)
-n <- 10000
-u <- runif(n)
+N <- 10000
+u <- runif(N)
 Y <- 1 / (u^4 * sqrt(2 * pi)) * exp(-1 / (2 * u^2))
 
-theta_hat <- cumsum(Y) / seq_len(n)
-
-f <- function(x) (x^2 / sqrt(2 * pi)) * exp(- x^2 / 2)
-theta <- integrate(f, lower = 1, upper = Inf)
+theta_hat <- cumsum(Y) / seq_len(N)
 
 plot(theta_hat, type = "l", xlab = "sample size")
 abline(h = theta$value, col = "red")
 
+theta_U <- theta_hat[N]
+sd_U <- sd(Y) / sqrt(N)
 
 ```
-## 4
-Two control variates I use are $f_1(u) = u$ and $f_2(u) = u(1 - u)$, where $U \sim Uniform(0, 1)$. Based on the result of question 3, we let our target to be$g(x) = \frac{1}{x^4 \sqrt{2 \pi}} e^{-1/2x^2}$. 
+
+## 4 Two control variates.
+
+Based on the transformed integral in Question 3, the target is $\theta = E[k(U)]$ with $k(u) = \frac{1}{u^4 \sqrt{2 \pi}} e^{-1/(2u^2)}$, $U \sim \text{Uniform}(0, 1)$. I use two control variates with known means,
+$$
+f_1(U) = U, \quad E[f_1(U)] = \frac{1}{2}, \qquad f_2(U) = U(1 - U), \quad E[f_2(U)] = \frac{1}{6}.
+$$
+$f_2$ is chosen because $k(u)$ is hump-shaped with its maximum at $u = 1/2$, just like $u(1-u)$, so the two have a similar shape and are positively correlated. The control variate estimator is
+$$
+\hat{\theta}_{CV} = \frac{1}{N}\sum_{i=1}^N \left[ k(U_i) + c_1\left(f_1(U_i) - \tfrac{1}{2}\right) + c_2\left(f_2(U_i) - \tfrac{1}{6}\right) \right],
+$$
+and the optimal coefficients $(c_1, c_2)$ equal minus the slopes of the linear regression of $k(U)$ on $f_1(U)$ and $f_2(U)$, so they are estimated with `lm()`.
 
 ```{r q4}
 set.seed(1024)
-n <- 10000
-u <- runif(n)
+N <- 10000
+u <- runif(N)
 g <- 1 / (u^4 * sqrt(2 * pi)) * exp(-1 / (2 *u^2))
 f1 <- u
 f2 <- u * (1 - u)
@@ -112,38 +173,37 @@ c1 <- -L$coefficients[2]
 c2 <- -L$coefficients[3]
 T_cv <- g + c1 * (f1 - 0.5) + c2 * (f2 - 1/6)
 
-theta_hat <- cumsum(T_cv) / seq_len(n)
-
-f <- function(x) (x^2 / sqrt(2 * pi)) * exp(- x^2 / 2)
-theta <- integrate(f, lower = 1, upper = Inf)
+theta_hat <- cumsum(T_cv) / seq_len(N)
 
 plot(theta_hat, type = "l", xlab = "sample size")
 abline(h = theta$value, col = "red")
 
+theta_CV <- theta_hat[N]
+sd_CV <- sd(T_cv) / sqrt(N)
+# Proportion of variance removed by the control variates
+summary(L)$r.squared
+
 ```
 
-## 5
 
+## 5 Stratified Sampling (Divide the range of integration into $n$ equal probable segments). Discuss the effect of $n$.
 
-```{r}
+For this question, I use the integrand obtained in Question 3, $k(u) = \frac{1}{u^4 \sqrt{2 \pi}} e^{-\frac{1}{2 u^2}}$, as the target function, so that $\theta = \int_0^1 k(u)\,du$, and estimate it by stratified sampling. The interval $(0, 1)$ is divided into $n$ subintervals, each of length $\frac{1}{n}$. Since $U \sim \text{Uniform}(0, 1)$, every subinterval has the same probability $\frac{1}{n}$. With a total of $M = 10000$ samples, $M/n$ samples are drawn uniformly within each subinterval, the mean of each subinterval is computed, and finally the average of these means is taken as the overall estimate.
+
+To test the effect of $n$, I try $n = 1, 2, 5, 10, 50, 100, 1000$, and for each $n$ the estimation is repeated $N = 1000$ times to compute the mean, standard deviation and bias of the estimates.
+Overall, as $n$ increases, the standard deviation of the estimate decreases, which agrees with the theoretical expectation of stratified sampling. 
+```{r q5_effect_of_n}
 set.seed(1024)
 M <- 10000
-n <- 10
-r <- M / n
 N <- 1000
-T2 <- numeric(n)
 estimates <- numeric(N)
-
 
 g <- function(x) {
   1 / (x^4 * sqrt(2 * pi)) * exp(-1 /(2 * x^2))
 }
 
-f <- function(x) (x^2 / sqrt(2 * pi)) * exp(- x^2 / 2)
-theta <- integrate(f, lower = 1, upper = Inf)$value 
-
-n <- c(1, 2, 5, 10, 50, 100, 500, 1000)
-result <- matrix(0, 8, 3, dimnames = list(n, c("mean", "sd", "bias")))
+n <- c(1, 2, 5, 10, 50, 100, 1000)
+result <- matrix(0, length(n), 3, dimnames = list(n, c("mean", "sd", "bias")))
 
 for(i in 1:length(n)) {
   k <- n[i]
@@ -156,28 +216,121 @@ for(i in 1:length(n)) {
   }
   result[i, 1] <- mean(estimates)
   result[i, 2] <- sd(estimates)
-  result[i, 3] <- mean(estimates) - theta
+  result[i, 3] <- mean(estimates) - theta$value
 }
 result
 
 ```
 
-## 5
-```{r}
+For the convergence plot and the evaluation of the method, I use the value of $n$ with the smallest standard deviation, which is $n = 1000$, to compute the final estimate and compare it with the other methods. The bias is not used for this choice, because the stratified estimator is unbiased for every $n$ and the bias column only reflects Monte Carlo noise. The results show that stratified sampling performs well for this problem. Especially when $n$ is large, it effectively reduces the variability of the estimate.
+
+```{r q5_convergence}
 set.seed(1024)
-n <- 10000
+# Use the n with the smallest sd from the table above
+k <- n[which.min(result[, "sd"])]
+T2 <- numeric(k)
+estimates <- numeric(N)
+for(j in 1:N) {
+  for(p in 1:k) {
+    T2[p] <- mean(g(runif(M/k, (p-1)/k, p/k))) 
+  }
+  estimates[j] <- mean(T2)
+}
+
+theta_hat <- cumsum(estimates) / seq_len(N)
+
+plot(theta_hat, type = "l", xlab = "number of replications")
+abline(h = theta$value, col = "red")
+
+# Keep the result of estimation and standard error for later use
+theta_S <- mean(estimates)
+sd_S <- sd(estimates)
+
+```
+
+## 6 Use the tilted density of standard normal distribution as the importance function given by $$ f_t(x) = \frac{e^{tx}\phi(x)}{M(t)}, $$ where $\phi$ is the standard normal distribution and $M(t)$ is the moment generating function of $\phi$. Discuss the effect of $t$, $-\infty < t < \infty$.
+
+The moment generating function of the standard normal distribution is $M(t) = e^{t^2/2}$, so the tilted density is
+$$
+f_t(x) = \frac{e^{tx} \frac{1}{\sqrt{2 \pi}} e^{-x^2 / 2}}{e^{t^2/2}} = \frac{1}{\sqrt{2 \pi}} e^{-(x-t)^2 / 2}.
+$$
+That is, $f_t(x)$ is exactly the density of $N(t, 1)$. Therefore, we use $f_t$ as the importance function, draw $X_1, \dots, X_N \overset{iid}{\sim} N(t, 1)$, and estimate $\theta$ by
+$$
+\hat{\theta}_t = \frac{1}{N}\sum_{i=1}^N X_i^2 I(X_i > 1) \frac{\phi(X_i)}{f_t(X_i)}, \qquad \frac{\phi(x)}{f_t(x)} = e^{t^2/2 - tx}.
+$$
+
+We try different values of $t$ from $-10$ to $10$. For each $t$, we draw $N = 10000$ samples from $N(t, 1)$ and compute the estimate, its standard error, and the proportion of samples falling in the region of integration $(1, \infty)$.
+
+```{r q6_effect_of_t}
+set.seed(1024)
+N <- 10000
 Y <- function(x, t) x^2 * dnorm(x) / dnorm(x, t, 1) * (x > 1)
 t_grid <- seq(-10, 10, by = 1)
-result <- matrix(0, length(t_grid), 2, dimnames = list(t_grid, c("mean", "sd")))
+result <- matrix(0, length(t_grid), 3,
+                 dimnames = list(t_grid, c("mean", "sd", "P(x > 1)")))
 
 for(i in 1:length(t_grid)) {
   t_val <- t_grid[i]
-  x <- rnorm(n, t_val, 1)
+  x <- rnorm(N, t_val, 1)
   T1 <- Y(x, t_val) 
   result[i, 1] <- mean(T1)
-  result[i, 2] <- sd(T1) / sqrt(n)
+  result[i, 2] <- sd(T1) / sqrt(N)
+  result[i, 3] <- mean(x > 1)
 }
 result
 
+``` 
+
+**Effect of t** 
+
+For every $t$ the estimator is unbiased, but its variance depends strongly on $t$. The standard deviation is the smallest when $t$ is around 2, because $N(t, 1)$ then puts most of its samples on $(1, \infty)$ near the peak of the integrand at $x = \sqrt{2}$. This is consistent with Question 2, where we also used $N(2, 1)$ as the importance function. Note that $t = 0$ is the direct Monte Carlo method of Question 1.
+
+As $t$ moves away from 2 in either direction, the variance grows very quickly and the estimate becomes unreliable. When $t$ is very negative, almost no samples fall in $(1, \infty)$, so the estimate and its standard deviation are both close to 0, which is misleading. When $t$ is very large, the samples lie far to the right of the important region and receive tiny weights, so the estimate is far below $\theta$. In both cases the important region is rarely or never sampled, so the standard deviation reported in the table is also far smaller than the true one and cannot be trusted.
+
+Lastly, we use $t = 2$ to draw the convergence plot with $N = 10000$ samples, and the final estimate and its standard error are kept for the comparison with the other methods.
+
+```{r q6_convergence}
+set.seed(1024)
+t_val <- 2
+N <- 10000
+
+x <- rnorm(N, t_val, 1)
+estimates <- Y(x, t_val)
+
+theta_hat <- cumsum(estimates) / seq_len(N)
+
+plot(theta_hat, type = "l", xlab = "sample size")
+abline(h = theta$value, col = "red")
+
+# Keep the result of estimation and standard error for later use
+theta_T <- mean(estimates)
+sd_T <- sd(estimates) / sqrt(N)
 
 ```
+
+
+## Final Comparison
+
+The table below summarizes the estimate of $\theta$ and its standard deviation for each method. All standard deviations refer to a single estimate based on $10000$ samples, so they are directly comparable. For stratified sampling, the sd is the standard deviation of a single estimate with $M = 10000$ samples across the $N = 1000$ replications, so the comparison of the sd is still fair. However, its $\hat{\theta}$ is the average of the $1000$ replications, which uses $10^7$ samples in total, so part of the reason why it is especially close to the true value is that it uses many more samples than the other methods. The true value is $\theta \approx 0.4006$.
+
+```{r final_comparison}
+comparison <- data.frame(
+  method = c("1. Direct Monte Carlo",
+             "2. Importance sampling, N(2, 1)",
+             "2. Self-normalized IS, N(2, 1)",
+             "3. Transformation to [0, 1]",
+             "4. Control variates",
+             "5. Stratified sampling, n = 1000",
+             "6. Tilted density, t = 2"),
+  theta = c(theta_MC, theta_IS, theta_SNIS, theta_U, theta_CV, theta_S, theta_T),
+  sd = c(sd_MC, sd_IS, sd_SNIS, sd_U, sd_CV, sd_S, sd_T)
+)
+# Variance of direct Monte Carlo divided by the variance of each method
+comparison$var_reduction <- sd_MC^2 / comparison$sd^2
+
+knitr::kable(comparison, digits = c(0, 5, 7, 1),
+             caption = paste("True value =", round(theta$value, 5)))
+
+```
+
+Compared with direct Monte Carlo, every method except self-normalized IS reduces the variance. Importance sampling with $N(2, 1)$ and the transformation to $[0, 1]$ reduce the variance by about 12–14 times. The tilted density with $t = 2$ is exactly $N(2, 1)$, and since it also uses the same seed and the same $10000$ samples, its result is identical to the importance sampling estimate in Question 2. The two control variates reduce it by about 56 times. Stratified sampling with $n = 1000$ strata is by far the most efficient, with a standard deviation of order $10^{-6}$. Self-normalized IS with $N(2, 1)$ performs worse than direct Monte Carlo, because the sum of the weights in its denominator has a large variance.
